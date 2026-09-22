@@ -216,3 +216,17 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# CodeShift runtime data
+backend/.codeshift/
+.codeshift/
+
+# Frontend dependencies and build output
+frontend/node_modules/
+frontend/dist/
+
+# Local IDE / OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

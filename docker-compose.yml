@@ -1,0 +1,51 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: codeshift-postgres
+    environment:
+      POSTGRES_DB: codeshift
+      POSTGRES_USER: codeshift
+      POSTGRES_PASSWORD: codeshift_dev
+    volumes:
+      - codeshift_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U codeshift -d codeshift"
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+    container_name: codeshift-backend
+    env_file:
+      - ./backend/.env
+    environment:
+      CORS_ORIGINS: http://localhost:5173,http://localhost:8080
+      DATABASE_URL: postgresql+psycopg://codeshift:codeshift_dev@postgres:5432/codeshift
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    volumes:
+      - codeshift_data:/app/.codeshift
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_BASE: http://localhost:8000/api/repositories
+    container_name: codeshift-frontend
+    depends_on:
+      - backend
+    ports:
+      - "8080:80"
+
+volumes:
+  codeshift_data:
+  codeshift_postgres_data:

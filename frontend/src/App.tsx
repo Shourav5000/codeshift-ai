@@ -193,10 +193,15 @@ type AnalysisResult = {
   test_execution?: {
     status?: string
     build_tool?: string
+    project_count?: number
+    reason?: string
     tests?: Array<{
       status?: string
       exit_code?: number | null
       command?: string[]
+      project_path?: string
+      build_tool?: string
+      stderr?: string
     }>
   }
 
@@ -1452,7 +1457,7 @@ function App() {
                 <div className="detail-list">
                   <div>
                     <span>
-                      Build tool
+                      Build tools
                     </span>
 
                     <strong>
@@ -1465,43 +1470,118 @@ function App() {
 
                   <div>
                     <span>
-                      Exit code
+                      Projects validated
                     </span>
 
                     <strong>
                       {analysis
                         .test_execution
-                        ?.tests?.[0]
-                        ?.exit_code ??
-                        'N/A'}
+                        ?.project_count ??
+                        analysis
+                          .test_execution
+                          ?.tests
+                          ?.length ??
+                        0}
                     </strong>
                   </div>
+                </div>
 
-                  <div>
-                    <span>
-                      Command
-                    </span>
+                {analysis
+                  .test_execution
+                  ?.reason && (
+                  <p className="validation-summary">
+                    {analysis
+                      .test_execution
+                      .reason}
+                  </p>
+                )}
 
-                    <code>
+                {analysis
+                  .test_execution
+                  ?.tests &&
+                  analysis.test_execution
+                    .tests.length > 0 && (
+                    <div className="validation-projects">
                       {analysis
                         .test_execution
-                        ?.tests?.[0]
-                        ?.command
-                        ?.map((part) => {
-                          const pieces =
-                            part.split(
-                              /[\\/]/,
-                            )
+                        .tests.map(
+                          (test, index) => {
+                            const command =
+                              test.command
+                                ?.map((part) => {
+                                  const pieces =
+                                    part.split(
+                                      /[\\/]/,
+                                    )
 
-                          return pieces[
-                            pieces.length - 1
-                          ]
-                        })
-                        .join(' ') ??
-                        'N/A'}
-                    </code>
-                  </div>
-                </div>
+                                  return pieces[
+                                    pieces.length -
+                                      1
+                                  ]
+                                })
+                                .join(' ') ??
+                              'N/A'
+
+                            const errorText =
+                              test.stderr
+                                ?.trim()
+
+                            return (
+                              <div
+                                className="validation-project"
+                                key={`${test.project_path ?? 'project'}-${index}`}
+                              >
+                                <div className="validation-project-head">
+                                  <div>
+                                    <strong>
+                                      {test.project_path ??
+                                        '.'}
+                                    </strong>
+                                    <small>
+                                      {test.build_tool ??
+                                        'Build'}
+                                    </small>
+                                  </div>
+
+                                  <span
+                                    className={statusClass(
+                                      test.status,
+                                    )}
+                                  >
+                                    {test.status ??
+                                      'unknown'}
+                                  </span>
+                                </div>
+
+                                <div className="validation-project-meta">
+                                  <span>
+                                    Exit code:{' '}
+                                    <strong>
+                                      {test.exit_code ??
+                                        'N/A'}
+                                    </strong>
+                                  </span>
+
+                                  <code>
+                                    {command}
+                                  </code>
+                                </div>
+
+                                {errorText &&
+                                  test.status !==
+                                    'passed' && (
+                                    <pre className="validation-error">
+                                      {errorText.slice(
+                                        -1200,
+                                      )}
+                                    </pre>
+                                  )}
+                              </div>
+                            )
+                          },
+                        )}
+                    </div>
+                  )}
               </article>
 
               <article className="panel">

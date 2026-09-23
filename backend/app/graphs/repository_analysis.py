@@ -219,12 +219,15 @@ def analyze_code_structure(
 
     code_structure = {}
 
-    if (
+    languages = (
         state.get(
-            "primary_language"
+            "languages",
+            {},
         )
-        == "Java"
-    ):
+        or {}
+    )
+
+    if "Java" in languages:
         code_structure = (
             scan_java_structure(
                 repo_path

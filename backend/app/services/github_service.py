@@ -208,6 +208,14 @@ def _get_repository(
     )
 
 
+def _get_authenticated_user() -> dict:
+
+    return _github_request(
+        "GET",
+        "/user",
+    )
+
+
 def _get_branch_ref(
     owner: str,
     repository: str,
@@ -249,6 +257,32 @@ def _create_branch(
             ),
             "sha": base_sha,
         },
+    )
+
+
+def _ensure_branch(
+    owner: str,
+    repository: str,
+    branch: str,
+    base_sha: str,
+) -> dict:
+
+    try:
+        return _get_branch_ref(
+            owner,
+            repository,
+            branch,
+        )
+
+    except GitHubAPIError as exc:
+        if exc.status_code != 404:
+            raise
+
+    return _create_branch(
+        owner,
+        repository,
+        branch,
+        base_sha,
     )
 
 
@@ -561,6 +595,148 @@ def create_pull_request_from_analysis(
                 ),
             }
 
+        publish_owner = owner
+        publish_repository = repository
+        using_fork = False
+
+        permissions = (
+            repository_info.get(
+                "permissions",
+                {},
+            )
+            or {}
+        )
+
+        if (
+            permissions
+            and permissions.get(
+                "push"
+            )
+            is False
+        ):
+            authenticated_user = (
+                _get_authenticated_user()
+            )
+
+            authenticated_login = (
+                authenticated_user.get(
+                    "login"
+                )
+            )
+
+            if not authenticated_login:
+                return {
+                    "status": "blocked",
+                    "reason": (
+                        "The configured GitHub token "
+                        "cannot write to the analyzed "
+                        "repository, and CodeShift "
+                        "could not determine the "
+                        "authenticated GitHub user."
+                    ),
+                }
+
+            try:
+                fork_info = (
+                    _get_repository(
+                        authenticated_login,
+                        repository,
+                    )
+                )
+
+            except GitHubAPIError as exc:
+                if exc.status_code == 404:
+                    return {
+                        "status": "blocked",
+                        "reason": (
+                            "The analyzed repository "
+                            "is not writable with the "
+                            "configured GitHub token. "
+                            "Create a fork at "
+                            f"https://github.com/"
+                            f"{authenticated_login}/"
+                            f"{repository}, grant the "
+                            "token Contents: Read and "
+                            "write and Pull requests: "
+                            "Read and write access to "
+                            "that fork, then retry "
+                            "Publish. You do not need "
+                            "to rerun the analysis."
+                        ),
+                    }
+
+                raise
+
+            parent_full_name = (
+                (
+                    fork_info.get(
+                        "parent"
+                    )
+                    or {}
+                ).get(
+                    "full_name"
+                )
+            )
+
+            expected_parent = (
+                f"{owner}/{repository}"
+            )
+
+            if (
+                not parent_full_name
+                or parent_full_name.lower()
+                != expected_parent.lower()
+            ):
+                return {
+                    "status": "blocked",
+                    "reason": (
+                        "A repository named "
+                        f"{authenticated_login}/"
+                        f"{repository} exists, but it "
+                        "is not a fork of "
+                        f"{expected_parent}. Create "
+                        "or use the correct fork, "
+                        "then retry Publish."
+                    ),
+                }
+
+            fork_permissions = (
+                fork_info.get(
+                    "permissions",
+                    {},
+                )
+                or {}
+            )
+
+            if (
+                fork_permissions
+                and fork_permissions.get(
+                    "push"
+                )
+                is False
+            ):
+                return {
+                    "status": "blocked",
+                    "reason": (
+                        "CodeShift found the fork "
+                        f"{authenticated_login}/"
+                        f"{repository}, but the "
+                        "configured GitHub token "
+                        "cannot write to it. Grant "
+                        "Contents: Read and write and "
+                        "Pull requests: Read and write "
+                        "access, then retry Publish."
+                    ),
+                }
+
+            publish_owner = (
+                authenticated_login
+            )
+            publish_repository = (
+                repository
+            )
+            using_fork = True
+
         base_ref = (
             _get_branch_ref(
                 owner,
@@ -587,9 +763,9 @@ def create_pull_request_from_analysis(
                 ),
             }
 
-        _create_branch(
-            owner,
-            repository,
+        _ensure_branch(
+            publish_owner,
+            publish_repository,
             branch,
             base_sha,
         )
@@ -679,8 +855,8 @@ def create_pull_request_from_analysis(
 
             remote_file = (
                 _get_file_info_if_exists(
-                    owner,
-                    repository,
+                    publish_owner,
+                    publish_repository,
                     normalized_path,
                     branch,
                 )
@@ -701,8 +877,8 @@ def create_pull_request_from_analysis(
 
                 file_result = (
                     _create_file(
-                        owner,
-                        repository,
+                        publish_owner,
+                        publish_repository,
                         normalized_path,
                         branch,
                         file_content,
@@ -740,8 +916,8 @@ def create_pull_request_from_analysis(
 
                 file_result = (
                     _update_file(
-                        owner,
-                        repository,
+                        publish_owner,
+                        publish_repository,
                         normalized_path,
                         branch,
                         file_content,
@@ -803,11 +979,17 @@ def create_pull_request_from_analysis(
             "published."
         )
 
+        pr_head = (
+            f"{publish_owner}:{branch}"
+            if using_fork
+            else branch
+        )
+
         pull_request = (
             _create_pull_request(
                 owner,
                 repository,
-                branch,
+                pr_head,
                 default_branch,
                 pr_body,
             )
@@ -819,6 +1001,13 @@ def create_pull_request_from_analysis(
             ),
             "owner": owner,
             "repository": repository,
+            "publish_owner": (
+                publish_owner
+            ),
+            "publish_repository": (
+                publish_repository
+            ),
+            "using_fork": using_fork,
             "default_branch": (
                 default_branch
             ),

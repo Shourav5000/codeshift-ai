@@ -552,8 +552,12 @@ function App() {
   const patchValidated =
     analysis?.status ===
       'patch_validated' ||
+    analysis?.status ===
+      'github_publish_failed' ||
     actionResult?.status ===
-      'patch_validated'
+      'patch_validated' ||
+    actionResult?.status ===
+      'github_publish_failed'
 
   const prCreated =
     analysis?.status ===

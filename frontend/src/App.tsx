@@ -7,6 +7,7 @@ const BACKEND_URL =
   import.meta.env.VITE_API_BASE || 'http://127.0.0.1:8000'
 
 const API_BASE = `${BACKEND_URL}/api/repositories`
+
 const ANALYSIS_STAGES = [
   {
     key: 'repository_validation',
@@ -127,6 +128,7 @@ function stageState(
 
   return 'pending'
 }
+
 
 type Finding = {
   category?: string
@@ -267,9 +269,7 @@ function severityClass(severity?: string) {
 }
 
 function App() {
-  const [repositoryUrl, setRepositoryUrl] = useState(
-    'https://github.com/Shourav5000/codeshift-demo',
-  )
+  const [repositoryUrl, setRepositoryUrl] = useState('')
 
   const [analysis, setAnalysis] =
     useState<AnalysisResult | null>(null)
@@ -342,7 +342,7 @@ function App() {
           },
           body: JSON.stringify({
             repository_url:
-              repositoryUrl,
+              repositoryUrl.trim(),
           }),
         },
       )
@@ -673,13 +673,18 @@ function App() {
                   )
                 }
                 placeholder="https://github.com/owner/repository"
+                autoComplete="off"
+                spellCheck={false}
                 required
               />
 
               <button
                 className="primary-button"
                 type="submit"
-                disabled={loading}
+                disabled={
+                  loading ||
+                  !repositoryUrl.trim()
+                }
               >
                 {loading
                   ? 'Analyzing...'
@@ -748,7 +753,7 @@ function App() {
             {currentStep === 'retrying' && (
               <div className="retry-notice">
                 <span className="retry-icon">
-                  â†»
+                  {'\u21BB'}
                 </span>
 
                 <div>
@@ -779,7 +784,7 @@ function App() {
                     >
                       <div className="stage-indicator">
                         {state === 'complete'
-                          ? 'âœ“'
+                          ? '\u2713'
                           : state === 'active'
                             ? (
                                 <span className="mini-spinner" />
@@ -1726,6 +1731,12 @@ function App() {
                   </h3>
                 </div>
               </div>
+
+              <p className="panel-copy">
+                Architecture assessment is generated before baseline
+                test execution. Final validation results are shown in
+                the Validation section above.
+              </p>
 
               <pre className="architecture-text">
                 {

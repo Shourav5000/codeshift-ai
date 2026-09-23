@@ -1,5 +1,5 @@
 /// <reference types="vite/client" />
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 
 import './App.css'
 
@@ -7,6 +7,126 @@ const BACKEND_URL =
   import.meta.env.VITE_API_BASE || 'http://127.0.0.1:8000'
 
 const API_BASE = `${BACKEND_URL}/api/repositories`
+const ANALYSIS_STAGES = [
+  {
+    key: 'repository_validation',
+    label: 'Validate repository',
+    detail: 'Checking the GitHub repository URL and request.',
+  },
+  {
+    key: 'repository_clone',
+    label: 'Clone repository',
+    detail: 'Creating an isolated working copy for analysis.',
+  },
+  {
+    key: 'repository_analysis',
+    label: 'Scan repository',
+    detail: 'Detecting languages, build tools and repository structure.',
+  },
+  {
+    key: 'repository_content_collection',
+    label: 'Collect evidence',
+    detail: 'Selecting repository files and evidence for grounded analysis.',
+  },
+  {
+    key: 'code_structure_analysis',
+    label: 'Analyze code structure',
+    detail: 'Inspecting classes, packages and source organization.',
+  },
+  {
+    key: 'dependency_analysis',
+    label: 'Analyze dependencies',
+    detail: 'Resolving project dependencies and build metadata.',
+  },
+  {
+    key: 'vulnerability_analysis',
+    label: 'Check vulnerabilities',
+    detail: 'Checking resolved dependencies for known vulnerabilities.',
+  },
+  {
+    key: 'semgrep_analysis',
+    label: 'Run static analysis',
+    detail: 'Scanning the repository with Semgrep.',
+  },
+  {
+    key: 'technical_debt_analysis',
+    label: 'Analyze technical debt',
+    detail: 'Evaluating maintainability, security and modernization signals.',
+  },
+  {
+    key: 'architecture_analysis',
+    label: 'Assess architecture',
+    detail: 'Building an evidence-grounded architecture assessment.',
+  },
+  {
+    key: 'modernization_planning',
+    label: 'Plan modernization',
+    detail: 'Creating the target-state modernization plan.',
+  },
+  {
+    key: 'code_change_planning',
+    label: 'Prepare code proposal',
+    detail: 'Generating bounded repository changes when evidence supports them.',
+  },
+  {
+    key: 'code_change_review',
+    label: 'Independent review',
+    detail: 'Reviewing the proposed change set against safety constraints.',
+  },
+  {
+    key: 'test_execution',
+    label: 'Run baseline tests',
+    detail: 'Executing deterministic repository validation.',
+  },
+  {
+    key: 'human_approval',
+    label: 'Evaluate safety gate',
+    detail: 'Determining whether human approval is required.',
+  },
+] as const
+
+function formatElapsed(totalSeconds: number) {
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+
+  if (minutes === 0) {
+    return `${seconds}s`
+  }
+
+  return `${minutes}m ${seconds.toString().padStart(2, '0')}s`
+}
+
+function stageState(
+  currentStep: string | undefined,
+  stageIndex: number,
+) {
+  if (
+    !currentStep ||
+    currentStep === 'queued' ||
+    currentStep === 'initializing' ||
+    currentStep === 'retrying'
+  ) {
+    return stageIndex === 0 ? 'active' : 'pending'
+  }
+
+  const completedIndex = ANALYSIS_STAGES.findIndex(
+    (stage) => stage.key === currentStep,
+  )
+
+  if (completedIndex < 0) {
+    return stageIndex === 0 ? 'active' : 'pending'
+  }
+
+  if (stageIndex <= completedIndex) {
+    return 'complete'
+  }
+
+  if (stageIndex === completedIndex + 1) {
+    return 'active'
+  }
+
+  return 'pending'
+}
 
 type Finding = {
   category?: string
@@ -30,6 +150,7 @@ type AnalysisResult = {
   analysis_id: string
   repository_url: string
   status: string
+  current_step?: string
   message?: string
   error?: string
   repository_name?: string | null
@@ -164,6 +285,27 @@ function App() {
   const [error, setError] =
     useState('')
 
+  const [elapsedSeconds, setElapsedSeconds] =
+    useState(0)
+
+  useEffect(() => {
+    if (!loading) {
+      return
+    }
+
+    const timer = window.setInterval(
+      () => {
+        setElapsedSeconds(
+          (seconds) => seconds + 1,
+        )
+      },
+      1000,
+    )
+
+    return () =>
+      window.clearInterval(timer)
+  }, [loading])
+
   async function parseResponse(response: Response) {
     const data = await response.json()
 
@@ -187,6 +329,7 @@ function App() {
     setError('')
     setActionResult(null)
     setAnalysis(null)
+    setElapsedSeconds(0)
 
     try {
       const response = await fetch(
@@ -216,6 +359,17 @@ function App() {
         )
       }
 
+      setAnalysis({
+        analysis_id: analysisId,
+        repository_url:
+          job.repository_url ?? repositoryUrl,
+        status: job.status ?? 'queued',
+        current_step: 'queued',
+        message:
+          job.message ??
+          'Repository analysis is queued.',
+      })
+
       while (true) {
         await new Promise((resolve) =>
           setTimeout(resolve, 3000),
@@ -230,6 +384,8 @@ function App() {
           await parseResponse(
             statusResponse,
           )
+
+        setAnalysis(result)
 
         if (
           result.status === 'processing' ||
@@ -404,6 +560,29 @@ function App() {
     approved ||
     noChangesRequired
 
+  const currentStep =
+    analysis?.current_step ?? 'queued'
+
+  const completedStageIndex =
+    ANALYSIS_STAGES.findIndex(
+      (stage) =>
+        stage.key === currentStep,
+    )
+
+  const activeStageIndex =
+    currentStep === 'retrying'
+      ? 0
+      : Math.min(
+          Math.max(
+            completedStageIndex + 1,
+            0,
+          ),
+          ANALYSIS_STAGES.length - 1,
+        )
+
+  const activeStage =
+    ANALYSIS_STAGES[activeStageIndex]
+
   return (
     <div className="app-shell">
       <header className="topbar">
@@ -528,26 +707,113 @@ function App() {
         )}
 
         {loading && (
-          <section className="loading-card">
-            <div className="spinner" />
+          <section className="analysis-progress-card">
+            <div className="progress-header">
+              <div className="progress-heading">
+                <div className="progress-orbit">
+                  <span />
+                  <span />
+                  <span />
+                </div>
 
-            <div>
-              <strong>
-                CodeShift is analyzing the
-                repository
-              </strong>
+                <div>
+                  <span className="section-label">
+                    Live analysis
+                  </span>
 
-              <p>
-                Scanning architecture,
-                dependencies, vulnerabilities,
-                code structure and modernization
-                opportunities.
-              </p>
+                  <h2>
+                    {currentStep === 'retrying'
+                      ? 'Retrying automatically'
+                      : 'CodeShift is working'}
+                  </h2>
+
+                  <p>
+                    {analysis?.message ??
+                      activeStage?.detail ??
+                      'Preparing repository analysis.'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="progress-runtime">
+                <span>Elapsed</span>
+                <strong>
+                  {formatElapsed(
+                    elapsedSeconds,
+                  )}
+                </strong>
+              </div>
+            </div>
+
+            {currentStep === 'retrying' && (
+              <div className="retry-notice">
+                <span className="retry-icon">
+                  â†»
+                </span>
+
+                <div>
+                  <strong>
+                    Temporary processing issue detected
+                  </strong>
+                  <p>
+                    CodeShift is retrying this analysis automatically.
+                    You do not need to submit the repository again.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            <div className="analysis-stage-grid">
+              {ANALYSIS_STAGES.map(
+                (stage, index) => {
+                  const state =
+                    stageState(
+                      currentStep,
+                      index,
+                    )
+
+                  return (
+                    <div
+                      className={`analysis-stage ${state}`}
+                      key={stage.key}
+                    >
+                      <div className="stage-indicator">
+                        {state === 'complete'
+                          ? 'âœ“'
+                          : state === 'active'
+                            ? (
+                                <span className="mini-spinner" />
+                              )
+                            : index + 1}
+                      </div>
+
+                      <div className="stage-copy">
+                        <strong>
+                          {stage.label}
+                        </strong>
+
+                        <small>
+                          {state === 'complete'
+                            ? 'Complete'
+                            : state === 'active'
+                              ? stage.detail
+                              : 'Waiting'}
+                        </small>
+                      </div>
+                    </div>
+                  )
+                },
+              )}
+            </div>
+
+            <div className="progress-footer">
+              <span className="live-dot" />
+              Live progress updates every few seconds
             </div>
           </section>
         )}
 
-        {analysis && (
+        {analysis && !loading && (
           <>
             <section className="workflow-card">
               <div>

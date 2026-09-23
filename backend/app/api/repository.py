@@ -136,6 +136,10 @@ async def get_repository_analysis(
             "processing",
         ),
 
+        current_step=analysis.get(
+            "current_step"
+        ),
+
         repository_name=analysis.get(
             "repository_name"
         ),
@@ -250,6 +254,10 @@ async def get_repository_analysis(
         message=analysis.get(
             "message",
             "Repository analysis is running.",
+        ),
+    
+        error=analysis.get(
+            "error"
         ),
     )
 

@@ -9,7 +9,9 @@ class RepositoryAnalysisJobResponse(BaseModel):
     analysis_id: str
     repository_url: str
     status: str
+    current_step: str | None = None
     message: str
+    error: str | None = None
 
 
 class RepositoryAnalysisResponse(BaseModel):
@@ -17,6 +19,7 @@ class RepositoryAnalysisResponse(BaseModel):
 
     repository_url: str
     status: str
+    current_step: str | None = None
 
     repository_name: str | None = None
     primary_language: str | None = None
@@ -90,6 +93,7 @@ class RepositoryAnalysisResponse(BaseModel):
     )
 
     message: str
+    error: str | None = None
 
 
 class ApprovalActionRequest(BaseModel):
@@ -102,6 +106,7 @@ class ApprovalDecisionResponse(BaseModel):
     approved: bool
     comment: str | None = None
     message: str
+    error: str | None = None
 
 
 class PatchApplicationResponse(BaseModel):
@@ -117,6 +122,7 @@ class PatchApplicationResponse(BaseModel):
     )
 
     message: str
+    error: str | None = None
 
 
 class PublishResponse(BaseModel):
@@ -134,3 +140,4 @@ class PublishResponse(BaseModel):
     pr_url: str | None = None
 
     message: str
+    error: str | None = None

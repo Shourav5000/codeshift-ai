@@ -10,4 +10,6 @@ def get_llm() -> ChatOpenAI:
     return ChatOpenAI(
         model="gpt-5.6-terra",
         temperature=0,
+        timeout=90,
+        max_retries=1,
     )

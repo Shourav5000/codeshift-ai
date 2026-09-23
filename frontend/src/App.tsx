@@ -30,6 +30,8 @@ type AnalysisResult = {
   analysis_id: string
   repository_url: string
   status: string
+  message?: string
+  error?: string
   repository_name?: string | null
   primary_language?: string | null
   build_tools?: string[]
@@ -202,10 +204,54 @@ function App() {
         },
       )
 
-      const data =
+      const job =
         await parseResponse(response)
 
-      setAnalysis(data)
+      const analysisId =
+        job.analysis_id
+
+      if (!analysisId) {
+        throw new Error(
+          'Backend did not return an analysis ID.',
+        )
+      }
+
+      while (true) {
+        await new Promise((resolve) =>
+          setTimeout(resolve, 3000),
+        )
+
+        const statusResponse =
+          await fetch(
+            `${API_BASE}/${analysisId}`,
+          )
+
+        const result =
+          await parseResponse(
+            statusResponse,
+          )
+
+        if (
+          result.status === 'processing' ||
+          result.status === 'queued' ||
+          result.status === 'started'
+        ) {
+          continue
+        }
+
+        if (
+          result.status === 'failed'
+        ) {
+          throw new Error(
+            result.error ??
+              result.message ??
+              'Repository analysis failed.',
+          )
+        }
+
+        setAnalysis(result)
+        break
+      }
     } catch (err) {
       setError(
         err instanceof Error

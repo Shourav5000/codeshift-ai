@@ -2,6 +2,7 @@ from pathlib import Path
 
 from fastapi import (
     APIRouter,
+    BackgroundTasks,
     HTTPException,
 )
 
@@ -14,6 +15,7 @@ from app.models.repository import (
     ApprovalDecisionResponse,
     PatchApplicationResponse,
     PublishResponse,
+    RepositoryAnalysisJobResponse,
     RepositoryAnalysisRequest,
     RepositoryAnalysisResponse,
 )
@@ -47,21 +49,15 @@ router = APIRouter(
 )
 
 
-@router.post(
-    "/analyze",
-    response_model=RepositoryAnalysisResponse,
-)
-async def analyze_repository(
-    request: RepositoryAnalysisRequest,
-):
-    repository_url = str(
-        request.repository_url
-    )
-
+async def _run_repository_analysis(
+    analysis_id: str,
+    repository_url: str,
+) -> None:
     initial_state = {
         "repository_url": repository_url,
         "current_step": "initializing",
-        "status": "started",
+        "status": "processing",
+        "message": "Repository analysis is running.",
     }
 
     try:
@@ -71,157 +67,227 @@ async def analyze_repository(
             )
         )
 
-        analysis_id = create_analysis(
-            result
+        result[
+            "repository_url"
+        ] = repository_url
+
+        result[
+            "message"
+        ] = (
+            "Repository analysis "
+            "completed successfully."
         )
 
-        return RepositoryAnalysisResponse(
-            analysis_id=analysis_id,
-
-            repository_url=repository_url,
-
-            status=result.get(
-                "status",
-                "completed",
-            ),
-
-            repository_name=result.get(
-                "repository_name"
-            ),
-
-            primary_language=result.get(
-                "primary_language"
-            ),
-
-            languages=result.get(
-                "languages",
-                {},
-            ),
-
-            frameworks=result.get(
-                "frameworks",
-                [],
-            ),
-
-            build_tools=result.get(
-                "build_tools",
-                [],
-            ),
-
-            java_version=result.get(
-                "java_version"
-            ),
-
-            has_tests=result.get(
-                "has_tests",
-                False,
-            ),
-
-            files_analyzed=result.get(
-                "files_analyzed",
-                0,
-            ),
-
-            code_structure=result.get(
-                "code_structure",
-                {},
-            ),
-
-            class_count=result.get(
-                "class_count",
-                0,
-            ),
-
-            dependency_analysis=result.get(
-                "dependency_analysis",
-                {},
-            ),
-
-            dependency_count=result.get(
-                "dependency_count",
-                0,
-            ),
-
-            vulnerability_analysis=result.get(
-                "vulnerability_analysis",
-                {},
-            ),
-
-            vulnerability_count=result.get(
-                "vulnerability_count",
-                0,
-            ),
-
-            semgrep_analysis=result.get(
-                "semgrep_analysis",
-                {},
-            ),
-
-            semgrep_finding_count=result.get(
-                "semgrep_finding_count",
-                0,
-            ),
-
-            technical_debt=result.get(
-                "technical_debt",
-                [],
-            ),
-
-            architecture_assessment=result.get(
-                "architecture_assessment"
-            ),
-
-            modernization_plan=result.get(
-                "modernization_plan",
-                {},
-            ),
-
-            code_change_proposal=result.get(
-                "code_change_proposal",
-                {},
-            ),
-
-            code_review=result.get(
-                "code_review",
-                {},
-            ),
-
-            test_execution=result.get(
-                "test_execution",
-                {},
-            ),
-
-            human_approval=result.get(
-                "human_approval",
-                {},
-            ),
-
-            message=(
-                "Repository analysis "
-                "completed successfully."
-            ),
+        update_analysis(
+            analysis_id,
+            result,
         )
-
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=400,
-            detail=str(exc),
-        ) from exc
-
-    except RuntimeError as exc:
-        raise HTTPException(
-            status_code=502,
-            detail=str(exc),
-        ) from exc
 
     except Exception as exc:
-        raise HTTPException(
-            status_code=500,
-            detail=(
-                "Repository analysis failed: "
-                f"{str(exc)}"
+        failed_state = {
+            **initial_state,
+            "status": "failed",
+            "current_step": "failed",
+            "error": str(exc),
+            "message": (
+                "Repository analysis failed."
             ),
-        ) from exc
+        }
+
+        update_analysis(
+            analysis_id,
+            failed_state,
+        )
+
+
+@router.post(
+    "/analyze",
+    response_model=RepositoryAnalysisJobResponse,
+    status_code=202,
+)
+async def analyze_repository(
+    request: RepositoryAnalysisRequest,
+    background_tasks: BackgroundTasks,
+):
+    repository_url = str(
+        request.repository_url
+    )
+
+    initial_state = {
+        "repository_url": repository_url,
+        "current_step": "queued",
+        "status": "processing",
+        "message": (
+            "Repository analysis has started."
+        ),
+    }
+
+    analysis_id = create_analysis(
+        initial_state
+    )
+
+    background_tasks.add_task(
+        _run_repository_analysis,
+        analysis_id,
+        repository_url,
+    )
+
+    return RepositoryAnalysisJobResponse(
+        analysis_id=analysis_id,
+        repository_url=repository_url,
+        status="processing",
+        message=(
+            "Repository analysis has started."
+        ),
+    )
+
+
+@router.get(
+    "/{analysis_id}",
+    response_model=RepositoryAnalysisResponse,
+)
+async def get_repository_analysis(
+    analysis_id: str,
+):
+    analysis = get_analysis(
+        analysis_id
+    )
+
+    if analysis is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Analysis not found.",
+        )
+
+    return RepositoryAnalysisResponse(
+        analysis_id=analysis_id,
+
+        repository_url=analysis.get(
+            "repository_url",
+            "",
+        ),
+
+        status=analysis.get(
+            "status",
+            "processing",
+        ),
+
+        repository_name=analysis.get(
+            "repository_name"
+        ),
+
+        primary_language=analysis.get(
+            "primary_language"
+        ),
+
+        languages=analysis.get(
+            "languages",
+            {},
+        ),
+
+        frameworks=analysis.get(
+            "frameworks",
+            [],
+        ),
+
+        build_tools=analysis.get(
+            "build_tools",
+            [],
+        ),
+
+        java_version=analysis.get(
+            "java_version"
+        ),
+
+        has_tests=analysis.get(
+            "has_tests",
+            False,
+        ),
+
+        files_analyzed=analysis.get(
+            "files_analyzed",
+            0,
+        ),
+
+        code_structure=analysis.get(
+            "code_structure",
+            {},
+        ),
+
+        class_count=analysis.get(
+            "class_count",
+            0,
+        ),
+
+        dependency_analysis=analysis.get(
+            "dependency_analysis",
+            {},
+        ),
+
+        dependency_count=analysis.get(
+            "dependency_count",
+            0,
+        ),
+
+        vulnerability_analysis=analysis.get(
+            "vulnerability_analysis",
+            {},
+        ),
+
+        vulnerability_count=analysis.get(
+            "vulnerability_count",
+            0,
+        ),
+
+        semgrep_analysis=analysis.get(
+            "semgrep_analysis",
+            {},
+        ),
+
+        semgrep_finding_count=analysis.get(
+            "semgrep_finding_count",
+            0,
+        ),
+
+        technical_debt=analysis.get(
+            "technical_debt",
+            [],
+        ),
+
+        architecture_assessment=analysis.get(
+            "architecture_assessment"
+        ),
+
+        modernization_plan=analysis.get(
+            "modernization_plan",
+            {},
+        ),
+
+        code_change_proposal=analysis.get(
+            "code_change_proposal",
+            {},
+        ),
+
+        code_review=analysis.get(
+            "code_review",
+            {},
+        ),
+
+        test_execution=analysis.get(
+            "test_execution",
+            {},
+        ),
+
+        human_approval=analysis.get(
+            "human_approval",
+            {},
+        ),
+
+        message=analysis.get(
+            "message",
+            "Repository analysis is running.",
+        ),
+    )
 
 
 @router.post(

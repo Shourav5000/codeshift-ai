@@ -5,6 +5,13 @@ class RepositoryAnalysisRequest(BaseModel):
     repository_url: HttpUrl
 
 
+class RepositoryAnalysisJobResponse(BaseModel):
+    analysis_id: str
+    repository_url: str
+    status: str
+    message: str
+
+
 class RepositoryAnalysisResponse(BaseModel):
     analysis_id: str
 
@@ -110,6 +117,7 @@ class PatchApplicationResponse(BaseModel):
     )
 
     message: str
+
 
 class PublishResponse(BaseModel):
     analysis_id: str

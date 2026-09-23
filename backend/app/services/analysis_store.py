@@ -315,6 +315,23 @@ def get_analysis(
     analysis_id: str,
 ) -> dict | None:
     with _LOCK:
+        # PostgreSQL is the source of truth in AWS. Always refresh from
+        # the database so polling requests on another ECS task do not
+        # return stale cached state.
+        if DATABASE_URL:
+            state = _read_analysis_db(
+                analysis_id
+            )
+
+            if state is None:
+                return None
+
+            _ANALYSES[
+                analysis_id
+            ] = state
+
+            return state
+
         state = _ANALYSES.get(
             analysis_id
         )
@@ -322,14 +339,9 @@ def get_analysis(
         if state is not None:
             return state
 
-        if DATABASE_URL:
-            state = _read_analysis_db(
-                analysis_id
-            )
-        else:
-            state = _read_analysis_disk(
-                analysis_id
-            )
+        state = _read_analysis_disk(
+            analysis_id
+        )
 
         if state is None:
             return None
@@ -339,7 +351,6 @@ def get_analysis(
         ] = state
 
         return state
-
 
 def update_analysis(
     analysis_id: str,

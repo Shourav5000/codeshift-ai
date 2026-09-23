@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.repository import router as repository_router
+from app.services.sqs_jobs import start_sqs_worker
 
 
 def get_cors_origins() -> list[str]:
@@ -36,6 +37,11 @@ app.add_middleware(
 )
 
 app.include_router(repository_router)
+
+
+@app.on_event("startup")
+async def startup_event():
+    start_sqs_worker()
 
 
 @app.get("/")

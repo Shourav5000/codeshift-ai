@@ -2,13 +2,9 @@ from pathlib import Path
 
 from fastapi import (
     APIRouter,
-    BackgroundTasks,
     HTTPException,
 )
 
-from app.graphs.repository_analysis import (
-    repository_analysis_graph,
-)
 
 from app.models.repository import (
     ApprovalActionRequest,
@@ -38,6 +34,9 @@ from app.services.patch_service import (
     apply_patch_plan,
 )
 
+from app.services.sqs_jobs import (
+    enqueue_analysis_job,
+)
 from app.services.test_runner import (
     run_repository_tests,
 )
@@ -49,57 +48,6 @@ router = APIRouter(
 )
 
 
-async def _run_repository_analysis(
-    analysis_id: str,
-    repository_url: str,
-) -> None:
-    initial_state = {
-        "repository_url": repository_url,
-        "current_step": "initializing",
-        "status": "processing",
-        "message": "Repository analysis is running.",
-    }
-
-    try:
-        result = (
-            await repository_analysis_graph.ainvoke(
-                initial_state
-            )
-        )
-
-        result[
-            "repository_url"
-        ] = repository_url
-
-        result[
-            "message"
-        ] = (
-            "Repository analysis "
-            "completed successfully."
-        )
-
-        update_analysis(
-            analysis_id,
-            result,
-        )
-
-    except Exception as exc:
-        failed_state = {
-            **initial_state,
-            "status": "failed",
-            "current_step": "failed",
-            "error": str(exc),
-            "message": (
-                "Repository analysis failed."
-            ),
-        }
-
-        update_analysis(
-            analysis_id,
-            failed_state,
-        )
-
-
 @router.post(
     "/analyze",
     response_model=RepositoryAnalysisJobResponse,
@@ -107,7 +55,6 @@ async def _run_repository_analysis(
 )
 async def analyze_repository(
     request: RepositoryAnalysisRequest,
-    background_tasks: BackgroundTasks,
 ):
     repository_url = str(
         request.repository_url
@@ -116,31 +63,48 @@ async def analyze_repository(
     initial_state = {
         "repository_url": repository_url,
         "current_step": "queued",
-        "status": "processing",
-        "message": (
-            "Repository analysis has started."
-        ),
+        "status": "queued",
+        "message": "Repository analysis is queued.",
     }
 
     analysis_id = create_analysis(
         initial_state
     )
 
-    background_tasks.add_task(
-        _run_repository_analysis,
-        analysis_id,
-        repository_url,
-    )
+    try:
+        enqueue_analysis_job(
+            analysis_id,
+            repository_url,
+        )
+    except Exception as exc:
+        failed_state = {
+            **initial_state,
+            "status": "failed",
+            "current_step": "queue_failed",
+            "error": str(exc),
+            "message": (
+                "Repository analysis could not be queued."
+            ),
+        }
+
+        update_analysis(
+            analysis_id,
+            failed_state,
+        )
+
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Unable to queue repository analysis."
+            ),
+        ) from exc
 
     return RepositoryAnalysisJobResponse(
         analysis_id=analysis_id,
         repository_url=repository_url,
-        status="processing",
-        message=(
-            "Repository analysis has started."
-        ),
+        status="queued",
+        message="Repository analysis is queued.",
     )
-
 
 @router.get(
     "/{analysis_id}",

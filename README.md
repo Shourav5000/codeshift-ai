@@ -1,8 +1,28 @@
 # CodeShift AI
 
-CodeShift AI is an AI-assisted software modernization platform that analyzes a GitHub repository, finds technical debt and security issues, proposes code changes, reviews those changes, runs tests, and requires human approval before anything is applied.
+**Agentic Software Intelligence & Modernization Platform**
 
-The goal is simple: help developers understand and modernize a codebase without giving an AI system unrestricted control over the repository.
+CodeShift AI is an AI-assisted software modernization platform that analyzes GitHub repositories, identifies technical debt and security risk, proposes bounded code changes, independently reviews those changes, runs validation tests, and keeps a human in control before repository mutation.
+
+The guiding principle is simple:
+
+> AI can analyze, recommend, review, and prepare changes, but repository mutation should remain controlled, testable, and explicitly approved.
+
+## Live Demo
+
+**Frontend**
+
+```text
+https://main.d1kebvhpd2c1en.amplifyapp.com
+```
+
+**Backend health endpoint**
+
+```text
+https://d381c47qj4bdxn.cloudfront.net/health
+```
+
+> CodeShift AI is a portfolio/development project. Public cloud resources may be scaled down, restricted, or disabled outside demonstration periods.
 
 ---
 
@@ -11,86 +31,178 @@ The goal is simple: help developers understand and modernize a codebase without 
 CodeShift AI can:
 
 - analyze a GitHub repository
-- detect languages, frameworks, build tools, Java versions, and project structure
-- inspect dependencies
-- scan for known vulnerabilities
+- inventory repository files and project structure
+- detect languages, frameworks, build tools, and Java versions
+- inspect project dependencies
+- scan dependencies for known vulnerabilities
 - run Semgrep static analysis
-- identify technical debt
-- review software architecture
+- identify technical debt and maintainability issues
+- generate an architecture assessment
 - create a modernization plan
-- propose code changes
-- review proposed changes before applying them
-- run baseline tests
-- require explicit human approval
+- propose bounded code changes
+- independently review proposed changes
+- run baseline build and test validation
+- require explicit human approval before mutation
 - apply approved patches
-- run tests again after the patch
-- create a Git branch and pull request
+- rerun tests after patch application
+- create Git branches and commits
+- publish pull requests through GitHub
 
-The workflow is designed so that AI can recommend and prepare changes, but a human stays in control of the final decision.
+The workflow is intentionally staged so that analysis, proposal generation, review, validation, approval, patching, and publishing remain separate steps.
 
 ---
 
-## How the Workflow Works
+## End-to-End Workflow
 
 ```text
 GitHub Repository
-       ↓
-Repository Analysis
-       ↓
-Architecture + Technical Debt Analysis
-       ↓
-Dependency + Security Scanning
-       ↓
-Modernization Plan
-       ↓
-Proposed Code Changes
-       ↓
+       |
+       v
+Repository Intelligence
+       |
+       v
+Architecture Analysis
+       |
+       v
+Technical Debt Analysis
+       |
+       v
+Dependency + Vulnerability Scanning
+       |
+       v
+Semgrep Static Analysis
+       |
+       v
+Modernization Planning
+       |
+       v
+Bounded Code Change Proposal
+       |
+       v
 Independent Review
-       ↓
-Baseline Tests
-       ↓
-Human Approval
-       ↓
+       |
+       v
+Baseline Build / Tests
+       |
+       v
+Human Approval Gate
+       |
+       v
 Patch Application
-       ↓
-Post-Patch Tests
-       ↓
+       |
+       v
+Post-Patch Validation
+       |
+       v
+Git Branch / Commit
+       |
+       v
 GitHub Pull Request
 ```
 
 ---
 
-## Why I Built It
+## AWS Cloud Architecture
 
-Modernizing an existing application is usually more difficult than building a new one.
+The production portfolio deployment runs on AWS.
 
-Before changing anything, developers need to understand:
+```text
+User Browser
+    |
+    v
+AWS Amplify
+React + TypeScript Frontend
+    |
+    v
+Amazon CloudFront
+HTTPS Distribution
+    |
+    v
+Application Load Balancer
+    |
+    v
+Amazon ECS on AWS Fargate
+Dockerized FastAPI Backend
+    |
+    +----------------------+
+    |                      |
+    v                      v
+Amazon RDS              External Services
+PostgreSQL              GitHub / OpenAI / OSV
+    |
+    v
+Persistent Analysis State
+```
 
-- the current architecture
-- dependencies
-- security problems
-- technical debt
-- build configuration
-- testing behavior
-- the risk of each proposed change
+### AWS Services Used
 
-CodeShift AI brings those steps into one workflow.
+- **AWS Amplify** for frontend hosting and deployment
+- **Amazon CloudFront** for HTTPS delivery and backend edge distribution
+- **Elastic Load Balancing / Application Load Balancer** for routing traffic to the backend
+- **Amazon ECS** for container orchestration
+- **AWS Fargate** for serverless container execution
+- **Amazon ECR** for Docker image storage
+- **Amazon RDS for PostgreSQL** for persistent application data
+- **AWS Secrets Manager** for runtime secret injection
+- **Amazon CloudWatch Logs** for ECS application logging
+- **AWS IAM** for task execution permissions and service access
+- **Amazon VPC** networking
+- **AWS Security Groups** for traffic isolation between ALB, ECS, and RDS
+- **AWS CLI** for deployment and infrastructure validation
 
-Instead of asking an LLM to simply "rewrite this project," CodeShift first gathers repository evidence, analyzes it, reviews proposed changes, validates the project, and requires a human decision before modifying the codebase.
+The ECS task is not directly exposed to the public internet on port 8000. Backend ingress is restricted to the Application Load Balancer security group.
 
 ---
 
-## Tech Stack
+## Docker and Containerization
+
+CodeShift AI uses Docker for repeatable local and cloud execution.
+
+### Local Container Stack
+
+Docker Compose can run:
+
+- PostgreSQL
+- the FastAPI backend
+- the React frontend
+
+### AWS Container Deployment
+
+```text
+Backend Source
+    |
+    v
+Docker Image
+    |
+    v
+Amazon ECR
+    |
+    v
+Amazon ECS
+    |
+    v
+AWS Fargate
+```
+
+This allows the backend to run from a reproducible container image locally and in AWS.
+
+---
+
+## Technology Stack
 
 ### Backend
 
 - **Python 3.12**
-- **FastAPI** for REST APIs
-- **LangGraph** for the multi-step agent workflow
-- **LangChain** for LLM integration
-- **OpenAI API** for AI reasoning and code analysis
-- **Pydantic** for request and response models
-- **Git CLI** for repository operations
+- **FastAPI**
+- **LangGraph**
+- **LangChain**
+- **OpenAI API**
+- **Pydantic**
+- **SQLAlchemy**
+- **psycopg**
+- **PostgreSQL**
+- **Git CLI**
+- Maven integration
 
 ### Frontend
 
@@ -98,33 +210,54 @@ Instead of asking an LLM to simply "rewrite this project," CodeShift first gathe
 - **TypeScript**
 - **Vite**
 - **CSS**
-- Responsive dashboard for desktop, tablet, and mobile
+- responsive dashboard UI
 
-### Security and Code Analysis
+### AI / Agentic Workflow
 
-- **Semgrep** for static analysis
-- **OSV** for known vulnerability lookup
-- **Maven dependency resolution**
-- Custom repository scanners
-- Custom deterministic safety checks
+- repository intelligence
+- architecture analysis agent
+- technical debt agent
+- modernization planning agent
+- code proposal agent
+- independent reviewer agent
+- human approval gate
+- controlled patch execution
+
+### Security and Static Analysis
+
+- **Semgrep**
+- **OSV vulnerability database**
+- Maven dependency resolution
+- deterministic safety checks
+- reviewer approval checks
+- pre-patch and post-patch test validation
+
+### DevOps / Cloud
+
+- **Docker**
+- **Docker Compose**
+- **Amazon ECR**
+- **Amazon ECS**
+- **AWS Fargate**
+- **AWS Amplify**
+- **Amazon CloudFront**
+- **Application Load Balancer**
+- **Amazon RDS for PostgreSQL**
+- **AWS Secrets Manager**
+- **Amazon CloudWatch**
+- **AWS IAM**
+- **Amazon VPC**
+- **AWS Security Groups**
+- **AWS CLI**
 
 ### GitHub Integration
 
 - GitHub REST API
-- Branch creation
-- File updates
-- Commit creation
-- Pull request creation
-
-### Local Persistence
-
-CodeShift stores analysis data and cloned workspaces locally under:
-
-```text
-backend/.codeshift/
-```
-
-This allows analysis state and repository workspaces to survive process restarts.
+- repository cloning
+- branch creation
+- file updates
+- commits
+- pull request creation
 
 ---
 
@@ -132,26 +265,19 @@ This allows analysis state and repository workspaces to survive process restarts
 
 ### Repository Scanner
 
-Collects basic information about the project, including:
-
-- programming languages
-- build tools
-- frameworks
-- Java version
-- test structure
-- file inventory
+Collects repository evidence including file inventory, programming language signals, build tools, framework signals, Java version, source structure, and test structure.
 
 ### Architecture Agent
 
-Reviews the repository structure and creates an architecture assessment based on the files that were actually found.
+Produces an architecture assessment grounded in repository files that were actually discovered.
 
 ### Technical Debt Agent
 
-Looks for maintainability problems, outdated patterns, testing gaps, and modernization opportunities.
+Identifies maintainability issues, testing gaps, outdated patterns, and modernization opportunities.
 
 ### Dependency Scanner
 
-Inspects project dependencies and resolves Maven dependency information.
+Inspects dependency metadata and resolves Maven dependency information.
 
 ### Vulnerability Scanner
 
@@ -163,25 +289,23 @@ Runs static analysis rules against the repository and returns security and code-
 
 ### Modernization Planner
 
-Creates a proposed target state and modernization plan based on the repository analysis.
+Produces a target-state recommendation and modernization plan based on repository evidence.
 
 ### Code Change Agent
 
-Generates bounded code changes using repository evidence.
-
-It also includes additional safety checks to avoid unsupported or speculative changes.
+Generates bounded code-change proposals instead of unrestricted repository rewrites.
 
 ### Reviewer Agent
 
-Reviews the proposed changes separately before they are allowed to continue through the pipeline.
+Independently reviews proposed changes before they are allowed to proceed.
 
 ### Test Runner
 
-Runs project tests before and after a patch is applied.
+Runs project validation before mutation and again after patch application.
 
 ### Human Approval Gate
 
-Even if the automated review and tests pass, CodeShift still requires explicit human approval before modifying the repository.
+Requires an explicit human decision before repository mutation when executable changes are proposed.
 
 ### Patch Service
 
@@ -189,71 +313,124 @@ Applies only approved and validated changes.
 
 ### GitHub Publish Service
 
-Creates a branch, commits the changes, and can open a pull request.
+Creates a branch, commits changes, and can publish a pull request.
+
+### Persistence Layer
+
+Analysis state is stored in PostgreSQL when a database connection is configured.
+
+Local development also supports workspace persistence under:
+
+```text
+backend/.codeshift/
+```
+
+Repository clones are stored in durable analysis workspaces so later approval and patch steps can continue from the same repository state.
 
 ---
 
 ## Safety Design
 
-One of the main goals of this project was to avoid giving the AI unrestricted control.
-
-CodeShift separates the process into several stages:
+CodeShift AI intentionally separates reasoning and execution.
 
 ```text
 Repository Evidence
-        ↓
+        |
+        v
 AI Proposal
-        ↓
-Safety Checks
-        ↓
+        |
+        v
+Deterministic Safety Checks
+        |
+        v
 Independent Review
-        ↓
-Tests
-        ↓
+        |
+        v
+Baseline Validation
+        |
+        v
 Human Approval
-        ↓
+        |
+        v
 Patch
-        ↓
-Post-Patch Tests
-        ↓
+        |
+        v
+Post-Patch Validation
+        |
+        v
 Pull Request
 ```
 
-Some of the safety checks include:
+Safety controls include:
 
+- no repository mutation during initial analysis
+- bounded code-change proposals
+- independent review before patching
+- baseline tests before mutation
+- explicit human approval
+- post-patch test validation
 - blocking unsupported dependency versions
-- preventing invented GitHub Action SHAs
-- avoiding unsupported Kubernetes security changes
-- checking for sensitive credential-related changes
+- protection against invented GitHub Action SHAs
+- restrictions on unsupported Kubernetes security edits
+- checks around credential-related changes
 - applying only reviewer-approved changes
-- requiring successful validation before publishing
+- pull-request publishing only after validation gates succeed
 
-This makes the system more controlled and easier to inspect.
+The cloud deployment also uses:
+
+- AWS Secrets Manager instead of embedding production secrets in container images
+- restricted ECS ingress from the ALB security group
+- private RDS access from the application tier
+- IAM-based service permissions
+- CloudWatch logging
 
 ---
 
-## Example Test
+## Example Validation: Spring PetClinic
 
-I tested CodeShift against the Spring PetClinic repository.
+CodeShift AI was tested against the Spring PetClinic repository.
 
 The analysis detected:
 
-- 132 files
-- 45 Java classes
-- 173 dependencies
-- 6 known vulnerability findings
-- 16 Semgrep findings
+- **132 files**
+- **45 Java classes**
+- **173 dependencies**
+- **6 known vulnerability findings**
+- **16 Semgrep findings**
 
-CodeShift then proposed four safe changes, including:
+CodeShift then proposed four bounded changes, including:
 
 - a PostgreSQL JDBC dependency update
 - Kubernetes `allowPrivilegeEscalation: false` hardening
 
-The proposed changes passed review and baseline tests.
+The proposed changes passed independent review and baseline testing.
 
-After human approval, CodeShift applied the patch and the post-patch tests passed successfully.
+After explicit human approval, CodeShift applied the patch and the post-patch validation passed.
 
-This test helped validate the complete workflow from repository analysis through patch validation.
+This demonstrated the complete workflow from repository ingestion through safe patch validation.
+
+---
+
+## Production Smoke Test
+
+The deployed AWS environment was also tested with:
+
+```text
+https://github.com/Shourav5000/codeshift-demo
+```
+
+The production pipeline successfully:
+
+- cloned and analyzed the repository
+- detected Maven
+- detected Java 17
+- generated technical-debt findings
+- produced an architecture assessment
+- ran `mvn test`
+- passed baseline validation
+- returned a controlled `no_changes_required` result when no executable patch was justified
+
+This validated the deployed path across the frontend, CDN, load balancer, ECS backend, AI workflow, persistence layer, and external integrations.
 
 ---
 
@@ -269,6 +446,7 @@ codeshift-ai/
 │   │   ├── models/
 │   │   ├── services/
 │   │   └── main.py
+│   ├── .codeshift/
 │   ├── pyproject.toml
 │   └── uv.lock
 │
@@ -277,26 +455,24 @@ codeshift-ai/
 │   ├── public/
 │   └── package.json
 │
+├── docker-compose.yml
 └── README.md
 ```
 
 ---
 
-## Running the Project Locally
+## Running Locally
 
 ### Requirements
 
-You will need:
-
 - Python 3.12+
 - `uv`
-- Node.js
+- Node.js / npm
 - Git
-- Java 21+
+- Java
 - Maven or Maven Wrapper
 - Semgrep
-
----
+- Docker Desktop, if using the containerized stack
 
 ### Backend
 
@@ -305,7 +481,7 @@ cd backend
 uv sync
 ```
 
-Create a file named:
+Create:
 
 ```text
 backend/.env
@@ -316,9 +492,11 @@ Example:
 ```env
 OPENAI_API_KEY=your_openai_api_key
 GITHUB_TOKEN=your_github_token
+DATABASE_URL=your_postgresql_connection_string
+CORS_ORIGINS=http://localhost:5173,http://localhost:8080
 ```
 
-Do not commit the `.env` file.
+Do not commit `.env`.
 
 Start the backend:
 
@@ -338,11 +516,7 @@ Swagger UI:
 http://127.0.0.1:8000/docs
 ```
 
----
-
 ### Frontend
-
-Open a second terminal:
 
 ```bash
 cd frontend
@@ -356,67 +530,145 @@ Frontend:
 http://localhost:5173
 ```
 
+For production builds, the frontend reads:
+
+```text
+VITE_API_BASE
+```
+
+to determine the backend base URL.
+
+### Docker Compose
+
+From the repository root:
+
+```bash
+docker compose up --build
+```
+
+The local stack includes PostgreSQL, the backend, and the frontend.
+
+---
+
+## AWS Deployment Overview
+
+### Backend
+
+1. Build the backend Docker image.
+2. Push the image to Amazon ECR.
+3. Deploy the image through Amazon ECS on AWS Fargate.
+4. Inject secrets through AWS Secrets Manager.
+5. Connect the ECS service to Amazon RDS PostgreSQL.
+6. Route traffic through an Application Load Balancer.
+7. Place Amazon CloudFront in front of the backend for HTTPS delivery.
+8. Send application logs to Amazon CloudWatch.
+
+### Frontend
+
+1. Connect the GitHub repository to AWS Amplify.
+2. Build the Vite frontend from the `frontend` directory.
+3. Set the production `VITE_API_BASE` environment variable.
+4. Deploy the `main` branch through Amplify.
+
 ---
 
 ## Current Status
 
-The main CodeShift workflow is working end to end.
+The main CodeShift AI workflow is implemented and deployed.
 
-Implemented:
+Completed capabilities include:
 
 - repository analysis
-- architecture analysis
-- technical debt analysis
+- architecture assessment
+- technical-debt analysis
 - dependency scanning
 - vulnerability scanning
 - Semgrep analysis
 - modernization planning
-- code change generation
-- automated review
+- bounded code-change generation
+- independent automated review
 - baseline testing
 - human approval
 - patch application
 - post-patch validation
-- local persistence
+- PostgreSQL persistence
+- durable repository workspaces
 - GitHub branch creation
-- pull request publishing
-- responsive frontend
+- pull-request publishing
+- responsive React frontend
+- Dockerized backend
+- local Docker Compose stack
+- Amazon ECR image publishing
+- Amazon ECS / AWS Fargate backend deployment
+- Amazon RDS PostgreSQL deployment
+- Application Load Balancer routing
+- Amazon CloudFront HTTPS distribution
+- AWS Amplify frontend deployment
+- AWS Secrets Manager integration
+- CloudWatch logging
+- AWS security-group isolation
 
 ---
 
 ## Current Limitations
 
-CodeShift is currently a portfolio and development project, not a production multi-user SaaS platform.
+CodeShift AI is a portfolio and engineering demonstration project, not a production multi-tenant SaaS platform.
 
-The main future improvements would be:
+Important future improvements include:
 
-- sandboxed build and test execution
-- database-backed persistence
-- authentication and user management
-- background jobs
-- stronger GitHub retry and conflict handling
-- better audit history
-- Docker deployment
-- production observability
-- automatic cleanup of old workspaces
+- authentication and user accounts
+- API authorization
+- rate limiting and quotas
+- background job processing for long-running analyses
+- stronger isolation for untrusted repository build scripts
+- per-analysis execution sandboxes
+- improved GitHub retry and conflict handling
+- richer audit history
+- production monitoring and alerting
+- automatic workspace cleanup
+- organization-level access controls
+- stronger cost controls for public deployments
 
-The most important production security improvement would be isolating Maven and Gradle execution inside containers or another sandbox because cloned repositories can contain untrusted build scripts.
+One of the most important production hardening steps would be running cloned repository build/test commands inside isolated disposable sandboxes rather than directly inside the long-lived application environment.
 
 ---
 
 ## Future Ideas
 
-Possible future extensions include:
+Potential extensions include:
 
-- Docker-based isolated repository execution
-- PostgreSQL and pgvector
-- Redis-backed background jobs
-- multi-repository analysis
+- isolated ephemeral execution environments
+- asynchronous job queues
+- richer action and evidence tracing
 - repository history analysis
-- organization-level dashboards
-- richer evidence and action tracing
+- multi-repository analysis
+- organization dashboards
 - CI/CD integrations
-- cloud deployment
+- policy-as-code controls
+- cost and risk scoring
+- additional language ecosystems
+- automated migration playbooks
+
+---
+
+## Why I Built It
+
+Modernizing an existing application is usually more difficult than building a new one.
+
+Before changing a codebase, an engineer needs to understand:
+
+- architecture
+- dependencies
+- vulnerabilities
+- technical debt
+- build configuration
+- test behavior
+- modernization constraints
+- the risk of each proposed change
+
+CodeShift AI brings those steps into one controlled workflow.
+
+Instead of asking an LLM to simply "rewrite this repository," CodeShift gathers evidence first, proposes bounded changes, reviews them independently, validates the project, and keeps the final mutation decision under human control.
 
 ---
 
@@ -424,4 +676,4 @@ Possible future extensions include:
 
 **Shourav Kumar Mandal**
 
-Software engineer interested in Java, Spring Boot, cloud modernization, AI-assisted software engineering, and enterprise application architecture.
+Software engineer focused on Java, Spring Boot, cloud modernization, AI-assisted software engineering, software architecture, and enterprise application development.

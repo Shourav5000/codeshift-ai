@@ -560,6 +560,15 @@ function App() {
     approved ||
     noChangesRequired
 
+  const canApprove =
+    analysis?.human_approval
+      ?.status ===
+      'awaiting_human_approval'
+
+  const approvalBlocked =
+    analysis?.human_approval
+      ?.status === 'blocked'
+
   const currentStep =
     analysis?.current_step ?? 'queued'
 
@@ -1505,7 +1514,9 @@ function App() {
                     <h3>
                       {noChangesRequired
                         ? 'Approval not required'
-                        : 'Approval'}
+                        : approvalBlocked
+                          ? 'Validation blocked'
+                          : 'Approval'}
                     </h3>
                   </div>
 
@@ -1549,7 +1560,10 @@ function App() {
                 <p>
                   {noChangesRequired
                     ? 'No repository actions are required because CodeShift did not propose any executable changes.'
-                    : 'Changes are never published until the automated review, validation and human approval gates succeed.'}
+                    : approvalBlocked
+                      ? analysis.human_approval?.reason ??
+                        'Baseline validation must pass before human approval.'
+                      : 'Changes are never published until the automated review, validation and human approval gates succeed.'}
                 </p>
               </div>
 
@@ -1560,10 +1574,13 @@ function App() {
                   </span>
                 )}
 
-                {!noChangesRequired &&
-                  !approved &&
-                  analysis.status !==
-                    'rejected' && (
+                {approvalBlocked && (
+                  <span className="status danger">
+                    Approval unavailable
+                  </span>
+                )}
+
+                {canApprove && (
                     <>
                       <button
                         className="secondary-button reject-button"

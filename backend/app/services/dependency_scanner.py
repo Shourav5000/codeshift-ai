@@ -644,48 +644,364 @@ def _parse_npm_dependencies(
     return dependencies
 
 
+IGNORED_PROJECT_DIRECTORIES = {
+    ".git",
+    ".idea",
+    ".vscode",
+    "node_modules",
+    ".venv",
+    "venv",
+    "__pycache__",
+    "dist",
+    "build",
+    "target",
+    ".next",
+}
+
+
+def _project_path_is_ignored(
+    path: Path,
+    repo_path: Path,
+) -> bool:
+    try:
+        relative = path.relative_to(
+            repo_path
+        )
+    except ValueError:
+        relative = path
+
+    return any(
+        part in IGNORED_PROJECT_DIRECTORIES
+        for part in relative.parts
+    )
+
+
+def _find_manifest_roots(
+    repo_path: Path,
+    filename: str,
+) -> list[Path]:
+    roots = {
+        path.parent.resolve()
+        for path in repo_path.rglob(
+            filename
+        )
+        if path.is_file()
+        and not _project_path_is_ignored(
+            path,
+            repo_path,
+        )
+    }
+
+    return sorted(
+        roots,
+        key=lambda path: (
+            len(
+                path.relative_to(
+                    repo_path
+                ).parts
+            ),
+            path.as_posix(),
+        ),
+    )
+
+
+def _relative_project_path(
+    project_root: Path,
+    repo_path: Path,
+) -> str:
+    relative = project_root.relative_to(
+        repo_path
+    )
+
+    value = relative.as_posix()
+
+    return value or "."
+
+
+def _dependency_identity(
+    dependency: dict,
+) -> tuple:
+    ecosystem = dependency.get(
+        "ecosystem"
+    )
+
+    if ecosystem == "Maven":
+        return (
+            "Maven",
+            dependency.get(
+                "group"
+            ),
+            dependency.get(
+                "artifact"
+            ),
+            dependency.get(
+                "version"
+            ),
+            dependency.get(
+                "scope"
+            ),
+        )
+
+    if ecosystem == "npm":
+        return (
+            "npm",
+            dependency.get(
+                "package"
+            ),
+            dependency.get(
+                "version"
+            ),
+            dependency.get(
+                "scope"
+            ),
+        )
+
+    return (
+        str(ecosystem),
+        str(dependency),
+    )
+
+
+def _aggregate_dependencies(
+    dependencies: list[dict],
+) -> list[dict]:
+    aggregated: dict[
+        tuple,
+        dict,
+    ] = {}
+
+    for dependency in dependencies:
+        key = _dependency_identity(
+            dependency
+        )
+
+        project_path = (
+            dependency.get(
+                "project_path"
+            )
+            or "."
+        )
+
+        if key not in aggregated:
+            item = {
+                **dependency,
+                "project_paths": [
+                    project_path
+                ],
+            }
+
+            aggregated[
+                key
+            ] = item
+
+            continue
+
+        existing = aggregated[
+            key
+        ]
+
+        project_paths = existing.get(
+            "project_paths",
+            [],
+        )
+
+        if (
+            project_path
+            not in project_paths
+        ):
+            project_paths.append(
+                project_path
+            )
+
+        existing[
+            "project_paths"
+        ] = sorted(
+            project_paths
+        )
+
+        existing[
+            "resolved"
+        ] = bool(
+            existing.get(
+                "resolved",
+                False,
+            )
+            or dependency.get(
+                "resolved",
+                False,
+            )
+        )
+
+        existing[
+            "transitive"
+        ] = bool(
+            existing.get(
+                "transitive",
+                False,
+            )
+            and dependency.get(
+                "transitive",
+                False,
+            )
+        )
+
+        if dependency.get(
+            "resolution_source"
+        ) == "maven_dependency_tree":
+            existing[
+                "resolution_source"
+            ] = (
+                "maven_dependency_tree"
+            )
+
+    return list(
+        aggregated.values()
+    )
+
+
 def scan_dependencies(
     repo_path: Path,
 ) -> dict:
+    repo_path = Path(
+        repo_path
+    ).resolve()
 
-    declared_maven_dependencies = (
-        _parse_maven_declared_dependencies(
-            repo_path
+    all_dependencies: list[
+        dict
+    ] = []
+
+    dependency_projects: list[
+        dict
+    ] = []
+
+    maven_resolution_used = (
+        False
+    )
+
+    maven_projects = (
+        _find_manifest_roots(
+            repo_path,
+            "pom.xml",
         )
     )
 
-    resolved_maven_dependencies = (
-        _run_maven_dependency_tree(
-            repo_path
+    for project_root in (
+        maven_projects
+    ):
+        declared = (
+            _parse_maven_declared_dependencies(
+                project_root
+            )
+        )
+
+        resolved = (
+            _run_maven_dependency_tree(
+                project_root
+            )
+        )
+
+        if resolved:
+            maven_resolution_used = (
+                True
+            )
+
+        merged = (
+            _merge_maven_dependencies(
+                declared,
+                resolved,
+            )
+        )
+
+        project_path = (
+            _relative_project_path(
+                project_root,
+                repo_path,
+            )
+        )
+
+        for dependency in merged:
+            all_dependencies.append(
+                {
+                    **dependency,
+                    "project_path": (
+                        project_path
+                    ),
+                }
+            )
+
+        dependency_projects.append(
+            {
+                "project_path": (
+                    project_path
+                ),
+                "ecosystem": (
+                    "Maven"
+                ),
+                "dependency_count": (
+                    len(merged)
+                ),
+            }
+        )
+
+    npm_projects = (
+        _find_manifest_roots(
+            repo_path,
+            "package.json",
         )
     )
 
-    maven_dependencies = (
-        _merge_maven_dependencies(
-            declared_maven_dependencies,
-            resolved_maven_dependencies,
+    for project_root in (
+        npm_projects
+    ):
+        dependencies = (
+            _parse_npm_dependencies(
+                project_root
+            )
         )
-    )
 
-    npm_dependencies = (
-        _parse_npm_dependencies(
-            repo_path
+        project_path = (
+            _relative_project_path(
+                project_root,
+                repo_path,
+            )
         )
-    )
+
+        for dependency in dependencies:
+            all_dependencies.append(
+                {
+                    **dependency,
+                    "project_path": (
+                        project_path
+                    ),
+                }
+            )
+
+        dependency_projects.append(
+            {
+                "project_path": (
+                    project_path
+                ),
+                "ecosystem": "npm",
+                "dependency_count": (
+                    len(dependencies)
+                ),
+            }
+        )
 
     all_dependencies = (
-        maven_dependencies
-        + npm_dependencies
+        _aggregate_dependencies(
+            all_dependencies
+        )
     )
 
     ecosystems: list[str] = []
 
-    if maven_dependencies:
+    if maven_projects:
         ecosystems.append(
             "Maven"
         )
 
-    if npm_dependencies:
+    if npm_projects:
         ecosystems.append(
             "npm"
         )
@@ -726,33 +1042,33 @@ def scan_dependencies(
     )
 
     return {
-        "ecosystems": ecosystems,
-
+        "ecosystems": (
+            ecosystems
+        ),
         "dependencies": (
             all_dependencies
         ),
-
-        "dependency_count": len(
-            all_dependencies
+        "dependency_count": (
+            len(
+                all_dependencies
+            )
         ),
-
         "resolved_dependency_count": (
             resolved_count
         ),
-
         "unresolved_dependency_count": (
             unresolved_count
         ),
-
         "direct_dependency_count": (
             direct_count
         ),
-
         "transitive_dependency_count": (
             transitive_count
         ),
-
-        "maven_resolution_used": bool(
-            resolved_maven_dependencies
+        "maven_resolution_used": (
+            maven_resolution_used
+        ),
+        "projects": (
+            dependency_projects
         ),
     }

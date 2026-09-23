@@ -1,8 +1,12 @@
+/// <reference types="vite/client" />
 import { useState, type FormEvent } from 'react'
 
 import './App.css'
 
-const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://127.0.0.1:8000/api/repositories'
+const BACKEND_URL =
+  import.meta.env.VITE_API_BASE || 'http://127.0.0.1:8000'
+
+const API_BASE = `${BACKEND_URL}/api/repositories`
 
 type Finding = {
   category?: string
